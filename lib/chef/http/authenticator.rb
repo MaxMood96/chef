@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 
+require "chef/mixin/powershell_exec"
+require "chef/mixin/shell_out"
 require_relative "auth_credentials"
 require_relative "../exceptions"
 autoload :OpenSSL, "openssl"
@@ -23,8 +25,13 @@ autoload :OpenSSL, "openssl"
 class Chef
   class HTTP
     class Authenticator
-
       DEFAULT_SERVER_API_VERSION = "2".freeze
+
+      extend Chef::Mixin::PowershellExec
+      include Chef::Mixin::PowershellExec
+
+      extend Chef::Mixin::ShellOut
+      include Chef::Mixin::ShellOut
 
       attr_reader :signing_key_filename
       attr_reader :raw_key
@@ -83,8 +90,54 @@ class Chef
         @auth_credentials.client_name
       end
 
+      def detect_certificate_key(client_name)
+        self.class.detect_certificate_key(client_name)
+      end
+
+      def check_certstore_for_key(client_name)
+        self.class.check_certstore_for_key(client_name)
+      end
+
+      def retrieve_certificate_key(client_name)
+        self.class.retrieve_certificate_key(client_name)
+      end
+
+      # Detects if a private key exists in a certificate repository like Keychain (macOS) or Certificate Store (Windows)
+      #
+      # @param client_name - we're using the node name to store and retrieve any keys
+      # Returns true if a key is found, false if not. False will trigger a registration event which will lead to a certificate based key being created
+      #
+      #
+      def self.detect_certificate_key(client_name)
+        if ChefUtils.windows?
+          check_certstore_for_key(client_name)
+        else # generic return for Mac and LInux clients
+          false
+        end
+      end
+
+      def self.check_certstore_for_key(client_name)
+        powershell_code = <<~CODE
+          $cert = Get-ChildItem -path cert:\\LocalMachine\\My -Recurse -Force  | Where-Object { $_.Subject -Match "#{client_name}" } -ErrorAction Stop
+          if ($cert) {
+            return $true
+          }
+          else{
+            return $false
+          }
+        CODE
+        powershell_exec!(powershell_code).result
+      end
+
       def load_signing_key(key_file, raw_key = nil)
-        if !!key_file
+        results = retrieve_certificate_key(Chef::Config[:node_name])
+
+        if key_file == nil? && raw_key == nil?
+          puts "\nNo key detected\n"
+        elsif results != false
+          # results variable can be 1 of 2 values - "False" or the contents of a key.
+          @raw_key = results
+        elsif !!key_file
           @raw_key = IO.read(key_file).strip
         elsif !!raw_key
           @raw_key = raw_key.strip
@@ -102,6 +155,51 @@ class Chef
         msg = "The file #{key_file} or :raw_key option does not contain a correctly formatted private key or the key is encrypted.\n"
         msg << "The key file should begin with '-----BEGIN RSA PRIVATE KEY-----' and end with '-----END RSA PRIVATE KEY-----'"
         raise Chef::Exceptions::InvalidPrivateKey, msg
+      end
+
+      def self.retrieve_certificate_key(client_name)
+        require "openssl" unless defined?(OpenSSL)
+
+        if ChefUtils.windows?
+        # This code block assumes a certificate with a subject name like "Chef-<node-name>" is in the \LocalMachine\My store and
+        # that there is a password stored in the registry to be used to export the pfx with.
+          powershell_password_code = <<~CODE
+              Try {
+                  Get-ItemPropertyValue -Path "HKLM:\\Software\\Progress\\Authenticator" -Name "PfxPass" -ErrorAction Stop;
+              }
+              Catch {
+                  return $false
+              }
+          CODE
+          password = powershell_exec!(powershell_password_code).result
+
+          if password == false
+            return false
+          end
+
+          powershell_code = <<~CODE
+              Try {
+                  $my_pwd = ConvertTo-SecureString -String "#{password}" -Force -AsPlainText;
+                  $cert = Get-ChildItem -path cert:\\LocalMachine\\My -Recurse | Where-Object { $_.Subject -match "#{client_name}" } -ErrorAction Stop;
+                  $tempfile = [System.IO.Path]::GetTempPath() + "exportpfx.pfx";
+                  Export-PfxCertificate -Cert $cert -Password $my_pwd -FilePath $tempfile;
+              }
+              Catch {
+                  return $false
+              }
+          CODE
+          myresult = powershell_exec!(powershell_code).result
+
+          if myresult != false
+            pkcs = OpenSSL::PKCS12.new(File.binread(myresult["PSPath"].split("::")[1]), password)
+            ::File.delete(myresult["PSPath"].split("::")[1])
+            OpenSSL::PKey::RSA.new(pkcs.key.to_pem)
+          else
+            false
+          end
+        else # doing nothing for the Mac and Linux clients
+          false
+        end
       end
 
       def authentication_headers(method, url, json_body = nil, headers = nil)
