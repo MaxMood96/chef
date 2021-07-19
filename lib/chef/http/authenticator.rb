@@ -161,8 +161,8 @@ class Chef
         require "openssl" unless defined?(OpenSSL)
 
         if ChefUtils.windows?
-        # This code block assumes a certificate with a subject name like "Chef-<node-name>" is in the \LocalMachine\My store and
-        # that there is a password stored in the registry to be used to export the pfx with.
+          # This code block assumes a certificate with a subject name like "Chef-<node-name>" is in the \LocalMachine\My store and
+          # that there is a password stored in the registry to be used to export the pfx with.
           powershell_password_code = <<~CODE
               Try {
                   Get-ItemPropertyValue -Path "HKLM:\\Software\\Progress\\Authenticator" -Name "PfxPass" -ErrorAction Stop;
@@ -181,18 +181,18 @@ class Chef
               Try {
                   $my_pwd = ConvertTo-SecureString -String "#{password}" -Force -AsPlainText;
                   $cert = Get-ChildItem -path cert:\\LocalMachine\\My -Recurse | Where-Object { $_.Subject -match "#{client_name}" } -ErrorAction Stop;
-                  $tempfile = [System.IO.Path]::GetTempPath() + "exportpfx.pfx";
+                  $tempfile = [System.IO.Path]::GetTempPath() + "export_pfx.pfx";
                   Export-PfxCertificate -Cert $cert -Password $my_pwd -FilePath $tempfile;
               }
               Catch {
                   return $false
               }
           CODE
-          myresult = powershell_exec!(powershell_code).result
+          my_result = powershell_exec!(powershell_code).result
 
-          if myresult != false
-            pkcs = OpenSSL::PKCS12.new(File.binread(myresult["PSPath"].split("::")[1]), password)
-            ::File.delete(myresult["PSPath"].split("::")[1])
+          if my_result != false
+            pkcs = OpenSSL::PKCS12.new(File.binread(my_result["PSPath"].split("::")[1]), password)
+            ::File.delete(my_result["PSPath"].split("::")[1])
             OpenSSL::PKey::RSA.new(pkcs.key.to_pem)
           else
             false

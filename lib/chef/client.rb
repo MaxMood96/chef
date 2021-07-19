@@ -754,7 +754,7 @@ class Chef
     end
 
     # Notification registration
-    class<<self
+    class << self
       #
       # Add a listener for the 'client run started' event.
       #
