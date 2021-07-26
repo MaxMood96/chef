@@ -17,7 +17,6 @@
 #
 
 require "chef/mixin/powershell_exec"
-require "chef/mixin/shell_out"
 require_relative "auth_credentials"
 require_relative "../exceptions"
 autoload :OpenSSL, "openssl"
@@ -27,11 +26,7 @@ class Chef
     class Authenticator
       DEFAULT_SERVER_API_VERSION = "2".freeze
 
-      extend Chef::Mixin::PowershellExec
       include Chef::Mixin::PowershellExec
-
-      extend Chef::Mixin::ShellOut
-      include Chef::Mixin::ShellOut
 
       attr_reader :signing_key_filename
       attr_reader :raw_key
