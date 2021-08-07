@@ -272,6 +272,21 @@ class Chef
           escape_and_echo(win_wget_ps)
         end
 
+        def bootstrap_certstore_cert_ps
+          bootstrap_certstore_cert_ps = <<~EOH
+            $pfx_password = New-Object -TypeName PSObject
+            $pfx_password | Add-Member -MemberType ScriptProperty -Name "Password" -Value { ("~!@#$%^&*_-+=`|\\(){}[<]:;'>,.?/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz".tochararray() | Sort-Object { Get-Random })[0..14] -join '' }
+            if (-not (Test-Path HKLM:\\SOFTWARE\\Progress)){
+              New-Item -Path "HKLM:\\SOFTWARE\\Progress\\Authenticator" -Force
+              New-ItemProperty  -path "HKLM:\\SOFTWARE\\Progress\\Authenticator" -name "PfxPass" -value $pfx_password.Password -PropertyType String
+            }
+
+            New-SelfSignedCertificate -Subject "chef-#{config[:chef_node_name]}" -FriendlyName "chef-#{config[:chef_node_name]}" -CertStoreLocation "Cert:\\LocalMachine\\My" -KeyExportPolicy Exportable
+          EOH
+
+          escape_and_echo(bootstrap_certstore_cert_ps)
+        end
+
         def install_chef
           # The normal install command uses regular double quotes in
           # the install command, so request such a string from install_command

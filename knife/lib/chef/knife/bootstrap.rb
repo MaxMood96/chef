@@ -306,6 +306,11 @@ class Chef
         description: "Location of the #{ChefUtils::Dist::Infra::PRODUCT} MSI. The default templates will prefer to download from this location. The MSI will be downloaded from #{ChefUtils::Dist::Org::WEBSITE} if not provided (Windows).",
         default: ""
 
+      option :bootstrap_certstore_cert,
+        long: "--bootstrap-certstore-cert",
+        description: "Configure a certificate in either Keychain or Certstore on the target node (Windows/Mac) to use as the client key.",
+        default: "false"
+
       # bootstrap override: Do this instead of our own setup.sh from omnitruck. Causes bootstrap_url to be ignored.
       option :bootstrap_install_command,
         long: "--bootstrap-install-command COMMANDS",

@@ -230,6 +230,32 @@ echo Writing validation key...
 echo Validation key written.
 @echo on
 
+@setlocal EnableDelayedExpansion
+
+
+<% if @config[:bootstrap_certstore_cert] -%>
+  echo Writing PowerShell script to put a client key in the \\LocalMachine\My certstore...
+> <%= bootstrap_directory %>\bootstrap_certstore_cert.ps1 (
+  <%= bootstrap_certstore_cert_ps %>
+)
+  echo PowerShell script written.
+
+  echo Writing PowerShell script to put a client key in the \\LocalMachine\My certstore...
+
+  @echo Now configuring the node to use CertStore to hold the client key
+  @set powershell_install=powershell.exe -ExecutionPolicy Unrestricted -InputFormat None -NoProfile -NonInteractive -File  <%= bootstrap_directory %>\bootstrap_certstore_cert.ps1
+  @echo !powershell_install!
+  @call !powershell_install!
+
+  @set INSTALL_ERROR_STATUS=!ERRORLEVEL!
+
+  @if ERRORLEVEL 1 (
+      @echo Failed PowerShell install with status code !INSTALL_ERROR_STATUS! > "&2"
+      @if !INSTALL_ERROR_STATUS!==0 set INSTALL_ERROR_STATUS=2
+  )
+
+<% end -%>
+
 <% if secret -%>
 > <%= bootstrap_directory %>\encrypted_data_bag_secret (
  <%= encrypted_data_bag_secret %>

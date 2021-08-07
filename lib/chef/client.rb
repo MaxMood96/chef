@@ -641,6 +641,7 @@ class Chef
       if Chef::HTTP::Authenticator.detect_certificate_key(client_name)
         events.skipping_registration(client_name, config)
         logger.trace("Client key #{client_name} is present in certificate repository - skipping registration")
+        config[:client_key] = "Cert:\\LocalMachine\\My\\chef-#{client_name}"
       elsif !config[:client_key]
         events.skipping_registration(client_name, config)
         logger.trace("Client key is unspecified - skipping registration")
