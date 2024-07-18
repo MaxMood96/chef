@@ -42,7 +42,7 @@ end
 group(:development, :test) do
   gem "rake"
   gem "rspec"
-  gem "webmock"
+  gem "webmock", ">= 3.15.1"
   gem "fauxhai-ng" # for chef-utils gem
 end
 
